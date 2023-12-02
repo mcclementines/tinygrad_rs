@@ -47,7 +47,7 @@ impl Tensor {
         let strides = dim
             .iter()
             .map(|x| {
-                stride = stride / x;
+                stride /= x;
                 stride
             })
             .collect();
