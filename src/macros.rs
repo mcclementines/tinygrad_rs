@@ -6,3 +6,13 @@ macro_rules! data {
         Data::from_vec(vec![$($x),+])
     );
 }
+
+/// Initializes a Tensor::with_data() in a user friendly way
+macro_rules! tensor {
+    () => (Tensor::new(vec![1], 0.0))
+}
+
+/// Creates a TensorSlice
+macro_rules! tslice {
+    () => (unimplemented!())
+}
