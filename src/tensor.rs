@@ -64,8 +64,9 @@ impl<T: Clone + Copy> Tensor<T> {
     /// ```
     /// use tinygrad_rs::Tensor;
     /// use tinygrad_rs::Data;
+    /// use tinygrad_rs::data;
     ///
-    /// let tensor = Tensor::with_data(vec![2, 1], Data::from_vec(vec![1.0, 2.0]));
+    /// let tensor = Tensor::with_data(vec![2, 1], data![1.0, 2.0]);
     /// ```
     pub fn with_data(dim: Vec<usize>, data: Vec<Data<T>>) -> Tensor<T> {
         assert_eq!(
@@ -170,8 +171,8 @@ impl<T: Clone + Copy> Tensor<T> {
             .sum()
     }
 
-    fn get_data(&self) -> Data<T> {
-        unimplemented!()
+    fn get_data(&self) -> Vec<Data<T>> {
+        self.0.borrow().data.clone()
     }
 
     fn set_data(&self, data: Vec<Data<T>>) {
@@ -181,8 +182,16 @@ impl<T: Clone + Copy> Tensor<T> {
     fn get_dim(&self) -> Vec<usize> {
         self.0.borrow().dim.clone()
     }
+    
+    fn set_dim(&mut self, dim: Vec<usize>) {
+        self.0.borrow_mut().dim = dim;
+    }
 
     fn get_strides(&self) -> Vec<usize> {
         self.0.borrow().strides.clone()
+    }
+    
+    fn set_strides(&mut self, strides: Vec<usize>) {
+        self.0.borrow_mut().strides = strides;
     }
 }
