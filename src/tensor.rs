@@ -25,6 +25,7 @@ struct TensorData<T: Clone + Copy> {
     data: Vec<Data<T>>,
     dim: Vec<usize>,
     strides: Vec<usize>,
+    offset: usize
 }
 
 impl<T: Clone + Copy> Tensor<T> {
@@ -50,8 +51,10 @@ impl<T: Clone + Copy> Tensor<T> {
                 stride
             })
             .collect();
+        
+        let offset = 0;
 
-        let tensor_data = TensorData { data, dim, strides };
+        let tensor_data = TensorData { data, dim, strides, offset };
 
         Tensor(Rc::new(RefCell::new(tensor_data)))
     }
@@ -69,9 +72,12 @@ impl<T: Clone + Copy> Tensor<T> {
     /// let tensor = Tensor::with_data(vec![2, 1], data![1.0, 2.0]);
     /// ```
     pub fn with_data(dim: Vec<usize>, data: Vec<Data<T>>) -> Tensor<T> {
-        assert_eq!(
-            dim.iter().product::<usize>(),
-            data.len(),
+        // TODO: Figure out a better way to handle tensor views.
+        // Idea here is that, instead of creating a new Data vec
+        // for every tensor, we just provide views onto the original
+        // Data vec (Pytorch method?) enabled by strides, dim, and offset.
+        assert!(
+            dim.iter().product::<usize>() <= data.len(),
             "Data does not fit specified dimensions"
         );
 
@@ -94,6 +100,13 @@ impl<T: Clone + Copy> Tensor<T> {
     /// assert_eq!(value, 0.0);
     /// ```
     pub fn get(&self, index: Vec<usize>) -> Tensor<T> {
+        // TODO: To be replaced when I have time, quick and dirty solution
+        // # of dim == index coords
+        assert_eq!(self.get_dim().len(), index.len(), "Provided index does not fit tensor");
+
+        // index in range
+        assert!(self.get_dim().iter().gt(index.iter()), "Provided index is out of range");
+
         let stride = self.stride(index);
         
         Tensor::with_data(vec![1], vec![self.0.borrow().data[stride].clone()])
@@ -104,9 +117,22 @@ impl<T: Clone + Copy> Tensor<T> {
     /// # Example
     ///
     /// ```
+    /// use tinygrad_rs::Tensor;
+    /// use tinygrad_rs::Data;
+    /// use tinygrad_rs::data;
+    ///
+    /// let tensor = Tensor::with_data(vec![2,2,2], data![1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0]);
+    /// let slice = tensor.get_slice(vec![4], vec![2], 0);
+    ///
+    /// assert_eq!(slice.get(vec![0]).item(), 1.0);
+    /// assert_eq!(slice.get(vec![2]).item(), 5.0);
     /// ```
-    pub fn get_slice(&self, index: Vec<usize>, dim: usize) -> Tensor<T> {
-        unimplemented!()
+    pub fn get_slice(&self, dim: Vec<usize>, strides: Vec<usize>, offset: usize) -> Tensor<T> {
+        let mut tensor = Tensor::with_data(dim, self.get_data());
+        tensor.set_strides(strides);
+        tensor.set_offset(offset);
+
+        tensor
     }
 
     /// Set the Tensor value located at the specified index
@@ -168,11 +194,11 @@ impl<T: Clone + Copy> Tensor<T> {
             .iter()
             .zip(self.get_strides())
             .map(|(i, s)| i * s)
-            .sum()
+            .sum::<usize>() + self.get_offset()
     }
 
     fn get_data(&self) -> Vec<Data<T>> {
-        self.0.borrow().data.clone()
+        self.0.borrow().data.to_owned()
     }
 
     fn set_data(&self, data: Vec<Data<T>>) {
@@ -180,7 +206,7 @@ impl<T: Clone + Copy> Tensor<T> {
     }
 
     fn get_dim(&self) -> Vec<usize> {
-        self.0.borrow().dim.clone()
+        self.0.borrow().dim.to_owned()
     }
     
     fn set_dim(&mut self, dim: Vec<usize>) {
@@ -188,10 +214,18 @@ impl<T: Clone + Copy> Tensor<T> {
     }
 
     fn get_strides(&self) -> Vec<usize> {
-        self.0.borrow().strides.clone()
+        self.0.borrow().strides.to_owned()
     }
     
     fn set_strides(&mut self, strides: Vec<usize>) {
         self.0.borrow_mut().strides = strides;
+    }
+
+    fn get_offset(&self) -> usize {
+        self.0.borrow().offset.to_owned()
+    }
+
+    fn set_offset(&mut self, offset: usize) {
+        self.0.borrow_mut().offset = offset;
     }
 }
