@@ -25,7 +25,7 @@ struct TensorData<T: Clone + Copy> {
     data: Vec<Data<T>>,
     dim: Vec<usize>,
     strides: Vec<usize>,
-    offset: usize
+    offset: usize,
 }
 
 impl<T: Clone + Copy> Tensor<T> {
@@ -42,19 +42,24 @@ impl<T: Clone + Copy> Tensor<T> {
     pub fn new(dim: Vec<usize>, initial_element: T) -> Tensor<T> {
         let mut data = Vec::new();
         data.resize(dim.iter().product(), Data::new(initial_element));
-        
+
         let mut stride: usize = dim.iter().product();
-        let strides = dim
+        let strides: Vec<usize> = dim
             .iter()
             .map(|x| {
                 stride /= x;
                 stride
             })
             .collect();
-        
+
         let offset = 0;
 
-        let tensor_data = TensorData { data, dim, strides, offset };
+        let tensor_data = TensorData {
+            data,
+            dim,
+            strides,
+            offset,
+        };
 
         Tensor(Rc::new(RefCell::new(tensor_data)))
     }
@@ -102,32 +107,62 @@ impl<T: Clone + Copy> Tensor<T> {
     pub fn get(&self, index: Vec<usize>) -> Tensor<T> {
         // TODO: To be replaced when I have time, quick and dirty solution
         // # of dim == index coords
-        assert_eq!(self.get_dim().len(), index.len(), "Provided index does not fit tensor");
+        assert_eq!(
+            self.get_dim().len(),
+            index.len(),
+            "Provided index does not fit tensor"
+        );
 
         // index in range
-        assert!(self.get_dim().iter().gt(index.iter()), "Provided index is out of range");
+        assert!(
+            self.get_dim()
+                .iter()
+                .zip(index.iter())
+                .all(|(&d, &i)| d > i),
+            "Provided index is out of range"
+        );
 
         let stride = self.stride(index);
-        
+
         Tensor::with_data(vec![1], vec![self.0.borrow().data[stride].clone()])
     }
-    
-    /// Get the specified slice of the Tensor
+
+    /// Get the specified slice of the Tensor. TODO: Range Support
     ///
     /// # Example
     ///
     /// ```
     /// use tinygrad_rs::Tensor;
     /// use tinygrad_rs::Data;
-    /// use tinygrad_rs::data;
+    /// use tinygrad_rs::{data, tslice};
     ///
     /// let tensor = Tensor::with_data(vec![2,2,2], data![1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0]);
-    /// let slice = tensor.get_slice(vec![4], vec![2], 0);
+    /// let slice = tensor.get_slice(tslice![:, 0, :]);
     ///
-    /// assert_eq!(slice.get(vec![0]).item(), 1.0);
-    /// assert_eq!(slice.get(vec![2]).item(), 5.0);
+    /// assert_eq!(slice.get(vec![0,0]).item(), 1.0);
+    /// assert_eq!(slice.get(vec![1,1]).item(), 6.0);
     /// ```
-    pub fn get_slice(&self, dim: Vec<usize>, strides: Vec<usize>, offset: usize) -> Tensor<T> {
+    pub fn get_slice(&self, slice: Vec<isize>) -> Tensor<T> {
+        let mut dim: Vec<usize> = Vec::new();
+        let mut strides: Vec<usize> = Vec::new();
+        let mut offset: usize = 0;
+
+        self.get_dim()
+            .iter()
+            .enumerate()
+            .zip(slice.iter())
+            .for_each(|((i, &d), s)| match s {
+                -1 => {
+                    dim.push(d);
+                    strides.push(self.get_strides()[i]);
+                }
+                _ => {
+                    if i == 0 {
+                        offset = self.get_strides()[i];
+                    }
+                }
+            });
+
         let mut tensor = Tensor::with_data(dim, self.get_data());
         tensor.set_strides(strides);
         tensor.set_offset(offset);
@@ -153,7 +188,7 @@ impl<T: Clone + Copy> Tensor<T> {
 
         self.0.borrow_mut().data[stride] = value;
     }
-    
+
     /// Get the shape of the Tensor
     ///
     /// # Example
@@ -169,7 +204,7 @@ impl<T: Clone + Copy> Tensor<T> {
     pub fn shape(&self) -> Vec<usize> {
         self.get_dim()
     }
-    
+
     /// Get the Data item of a scalar tensor.
     ///
     /// # Example
@@ -185,7 +220,7 @@ impl<T: Clone + Copy> Tensor<T> {
     pub fn item(&self) -> Data<T> {
         match self.0.borrow().data.len() == 1 {
             true => self.0.borrow().data[0].to_owned(),
-            false => panic!("Tensor references multiple pieces of Data")
+            false => panic!("Tensor references multiple pieces of Data"),
         }
     }
 
@@ -194,7 +229,8 @@ impl<T: Clone + Copy> Tensor<T> {
             .iter()
             .zip(self.get_strides())
             .map(|(i, s)| i * s)
-            .sum::<usize>() + self.get_offset()
+            .sum::<usize>()
+            + self.get_offset()
     }
 
     fn get_data(&self) -> Vec<Data<T>> {
@@ -208,7 +244,7 @@ impl<T: Clone + Copy> Tensor<T> {
     fn get_dim(&self) -> Vec<usize> {
         self.0.borrow().dim.to_owned()
     }
-    
+
     fn set_dim(&mut self, dim: Vec<usize>) {
         self.0.borrow_mut().dim = dim;
     }
@@ -216,7 +252,7 @@ impl<T: Clone + Copy> Tensor<T> {
     fn get_strides(&self) -> Vec<usize> {
         self.0.borrow().strides.to_owned()
     }
-    
+
     fn set_strides(&mut self, strides: Vec<usize>) {
         self.0.borrow_mut().strides = strides;
     }

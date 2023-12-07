@@ -36,7 +36,7 @@ impl<T: Clone + Copy> Data<T> {
 
     /// Retrieves a copy of the raw data value from a `Data` instance.
     ///
-    /// This method returns the current value stored in a `Data` object without 
+    /// This method returns the current value stored in a `Data` object without
     /// altering the original instance. The value is returned as a copy, ensuring
     /// that the `Data` instance remains unmodified.
     ///
@@ -62,7 +62,7 @@ impl<T: Clone + Copy> Data<T> {
 
     /// Sets the raw data value for a `Data` instance.
     ///
-    /// This method allows updating the value contained within a `Data` object. 
+    /// This method allows updating the value contained within a `Data` object.
     /// The existing data is replaced with the new value provided as an argument.
     ///
     /// # Examples
@@ -86,7 +86,7 @@ impl<T: Clone + Copy> Data<T> {
     }
 }
 
-impl<T: Clone + Copy  + PartialEq> PartialEq for Data<T> {
+impl<T: Clone + Copy + PartialEq> PartialEq for Data<T> {
     fn eq(&self, other: &Self) -> bool {
         self.get() == other.get()
     }
@@ -103,4 +103,3 @@ impl PartialEq<f32> for Data<f32> {
         self.get() == *other
     }
 }
-
