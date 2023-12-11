@@ -1,13 +1,19 @@
 //! src/data.rs
 
+use std::ops::{Add, Div, Mul, Sub, Neg};
 use std::{cell::RefCell, rc::Rc};
 
 /// Data object used in tinygrad_rs
 ///
 #[derive(Clone, Debug)]
-pub struct Data<T: Clone + Copy>(pub Rc<RefCell<T>>);
+pub struct Data<
+    T: Clone + Copy + Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Div<Output = T> + Neg<Output = T>,
+>(pub Rc<RefCell<T>>);
 
-impl<T: Clone + Copy> Data<T> {
+impl<T> Data<T>
+where
+    T: Clone + Copy + Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Div<Output = T> + Neg<Output = T>,
+{
     /// A `Data` object in the `tinygrad_rs` library.
     ///
     /// # Examples
@@ -86,7 +92,17 @@ impl<T: Clone + Copy> Data<T> {
     }
 }
 
-impl<T: Clone + Copy + PartialEq> PartialEq for Data<T> {
+impl<
+        T: Clone
+            + Copy
+            + Add<Output = T>
+            + Sub<Output = T>
+            + Mul<Output = T>
+            + Div<Output = T>
+            + Neg<Output = T>
+            + PartialEq,
+    > PartialEq for Data<T>
+{
     fn eq(&self, other: &Self) -> bool {
         self.get() == other.get()
     }

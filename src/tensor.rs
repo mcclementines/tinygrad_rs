@@ -1,5 +1,6 @@
 //! src/tensor.rs
 
+use std::ops::{Add, Div, Mul, Sub, Neg};
 use std::{cell::RefCell, rc::Rc, usize};
 
 use crate::Data;
@@ -19,16 +20,23 @@ use crate::Data;
 /// assert_eq!(tensor.get(vec![0,0]).item(), 1.0);
 /// assert_eq!(tensor.get(vec![1,1]).item(), 4.0);
 /// ```
-pub struct Tensor<T: Clone + Copy>(Rc<RefCell<TensorData<T>>>);
+pub struct Tensor<
+    T: Clone + Copy + Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Div<Output = T> + Neg<Output = T>,
+>(Rc<RefCell<TensorData<T>>>);
 
-struct TensorData<T: Clone + Copy> {
+struct TensorData<
+    T: Clone + Copy + Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Div<Output = T> + Neg<Output = T>,
+> {
     data: Vec<Data<T>>,
     dim: Vec<usize>,
     strides: Vec<usize>,
     offset: usize,
 }
 
-impl<T: Clone + Copy> Tensor<T> {
+impl<T> Tensor<T>
+where
+    T: Clone + Copy + Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Div<Output = T> + Neg<Output = T>,
+{
     /// Create a new Tensor with specified dimensions. Values are initialized
     /// at 0.0
     ///
@@ -77,10 +85,6 @@ impl<T: Clone + Copy> Tensor<T> {
     /// let tensor = Tensor::with_data(vec![2, 1], data![1.0, 2.0]);
     /// ```
     pub fn with_data(dim: Vec<usize>, data: Vec<Data<T>>) -> Tensor<T> {
-        // TODO: Figure out a better way to handle tensor views.
-        // Idea here is that, instead of creating a new Data vec
-        // for every tensor, we just provide views onto the original
-        // Data vec (Pytorch method?) enabled by strides, dim, and offset.
         assert!(
             dim.iter().product::<usize>() <= data.len(),
             "Data does not fit specified dimensions"
@@ -222,6 +226,91 @@ impl<T: Clone + Copy> Tensor<T> {
             true => self.0.borrow().data[0].to_owned(),
             false => panic!("Tensor references multiple pieces of Data"),
         }
+    }
+    
+    /// Add two tensors together
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    /// use tinygrad_rs::Data;
+    /// use tinygrad_rs::data;
+    /// 
+    /// let a = Tensor::with_data(vec![2,2], data![1.0, 2.0, 3.0, 4.0]);
+    /// let b = Tensor::with_data(vec![2,2], data![2.0, 4.0, 8.0, 16.0]);
+    /// let c = a.add(&b);
+    /// 
+    /// // Previous tensors remain unchanged
+    /// assert_eq!(a.get(vec![1,1]).item(), 4.0);
+    /// assert_eq!(b.get(vec![1,1]).item(), 16.0);
+    ///
+    /// // Addition results in new tensor
+    /// assert_eq!(c.get(vec![1,1]).item(), 20.0);
+    /// ```
+    pub fn add(&self, rhs: &Tensor<T>) -> Tensor<T> {
+        assert!(
+            self.get_dim()
+                .iter()
+                .zip(rhs.get_dim())
+                .all(|(&l, r)| l == r),
+            "Tensor dimensions do not match. Cannot add"
+        );
+
+        let data = self
+            .get_data()
+            .iter()
+            .zip(rhs.get_data())
+            .map(|(l, r)| Data::<T>::new(l.get() + r.get()))
+            .collect::<Vec<Data<T>>>();
+
+        Tensor::with_data(self.get_dim(), data)
+    }
+
+    /// Subtract two tensors
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    /// use tinygrad_rs::Data;
+    /// use tinygrad_rs::data;
+    /// 
+    /// let a = Tensor::with_data(vec![2,2], data![1.0, 2.0, 3.0, 4.0]);
+    /// let b = Tensor::with_data(vec![2,2], data![2.0, 4.0, 8.0, 16.0]);
+    /// let c = a.sub(&b);
+    /// 
+    /// // Previous tensors remain unchanged
+    /// assert_eq!(a.get(vec![1,1]).item(), 4.0);
+    /// assert_eq!(b.get(vec![1,1]).item(), 16.0);
+    ///
+    /// // Addition results in new tensor
+    /// assert_eq!(c.get(vec![1,1]).item(), -12.0);
+    /// ```
+    pub fn sub(&self, rhs: &Tensor<T>) -> Tensor<T> {
+        self.add(&rhs.neg())
+    }
+
+    pub fn neg(&self) -> Tensor<T> {
+        let data = self.get_data().iter().map(|d| Data::new(-d.get())).collect();
+        
+        Tensor::with_data(self.get_dim(), data)
+    }
+    
+    pub fn neg_(&self) {
+        self.get_data().iter().for_each(|d| d.set(-d.get()));
+    }
+
+    pub fn mul(&self, rhs: &Tensor<T>) -> Tensor<T> {
+        unimplemented!()
+    }
+
+    pub fn matmul(&self, rhs: &Tensor<T>) -> Tensor<T> {
+        unimplemented!()
+    }
+
+    pub fn batch_matmul(&self, rhs: &Tensor<T>) -> Tensor<T> {
+        unimplemented!()
     }
 
     fn stride(&self, index: Vec<usize>) -> usize {
