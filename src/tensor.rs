@@ -392,22 +392,18 @@ where
             "Tensor shapes do not match or are not scalar"
         );
 
-        let data: Vec<Data<T>>;
-
-        if self.shape() == rhs.shape() {
-            data = self
-                .get_data()
+        let data: Vec<Data<T>> = if self.shape() == rhs.shape() {
+            self.get_data()
                 .iter()
                 .zip(rhs.get_data().iter())
                 .map(|(x, y)| Data::new(x.get() * y.get()))
-                .collect();
+                .collect()
         } else {
-            data = self
-                .get_data()
+            self.get_data()
                 .iter()
                 .map(|x| Data::new(x.get() * rhs.item().get()))
-                .collect();
-        }
+                .collect()
+        };
 
         Tensor::with_data(self.shape(), data)
     }
@@ -446,12 +442,11 @@ where
             let data = self
                 .get_data()
                 .chunks(rhs.shape()[0])
-                .map(|c| {
-                    Tensor::with_data(rhs.shape(), c.into_iter().map(|d| d.clone()).collect())
+                .flat_map(|c| {
+                    Tensor::with_data(rhs.shape(), c.to_vec())
                         .matmul(rhs)
                         .get_data()
                 })
-                .flatten()
                 .collect();
 
             let mut dim = self.shape();
@@ -484,7 +479,7 @@ where
         }
     }
 
-    pub fn batch_matmul(&self, rhs: &Tensor<T>) -> Tensor<T> {
+    pub fn batch_matmul(&self, _rhs: &Tensor<T>) -> Tensor<T> {
         unimplemented!()
     }
 
