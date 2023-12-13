@@ -1,6 +1,8 @@
 //! src/tensor.rs
 
-use std::ops::{Add, Div, Mul, Sub, Neg};
+use std::fmt::Debug;
+use std::iter::Sum;
+use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::{cell::RefCell, rc::Rc, usize};
 
 use crate::Data;
@@ -21,11 +23,29 @@ use crate::Data;
 /// assert_eq!(tensor.get(vec![1,1]).item(), 4.0);
 /// ```
 pub struct Tensor<
-    T: Clone + Copy + Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Div<Output = T> + Neg<Output = T>,
+    T: Clone
+        + Copy
+        + Debug
+        + Default
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
+        + Neg<Output = T>
+        + Sum,
 >(Rc<RefCell<TensorData<T>>>);
 
 struct TensorData<
-    T: Clone + Copy + Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Div<Output = T> + Neg<Output = T>,
+    T: Clone
+        + Copy
+        + Debug
+        + Default
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
+        + Neg<Output = T>
+        + Sum,
 > {
     data: Vec<Data<T>>,
     dim: Vec<usize>,
@@ -35,7 +55,16 @@ struct TensorData<
 
 impl<T> Tensor<T>
 where
-    T: Clone + Copy + Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Div<Output = T> + Neg<Output = T>,
+    T: Clone
+        + Copy
+        + Debug
+        + Default
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Div<Output = T>
+        + Neg<Output = T>
+        + Sum,
 {
     /// Create a new Tensor with specified dimensions. Values are initialized
     /// at 0.0
@@ -161,9 +190,7 @@ where
                     strides.push(self.get_strides()[i]);
                 }
                 _ => {
-                    if i == 0 {
-                        offset = self.get_strides()[i];
-                    }
+                    offset += self.get_strides()[i] * *s as usize;
                 }
             });
 
@@ -227,7 +254,7 @@ where
             false => panic!("Tensor references multiple pieces of Data"),
         }
     }
-    
+
     /// Add two tensors together
     ///
     /// # Example
@@ -236,11 +263,11 @@ where
     /// use tinygrad_rs::Tensor;
     /// use tinygrad_rs::Data;
     /// use tinygrad_rs::data;
-    /// 
+    ///
     /// let a = Tensor::with_data(vec![2,2], data![1.0, 2.0, 3.0, 4.0]);
     /// let b = Tensor::with_data(vec![2,2], data![2.0, 4.0, 8.0, 16.0]);
     /// let c = a.add(&b);
-    /// 
+    ///
     /// // Previous tensors remain unchanged
     /// assert_eq!(a.get(vec![1,1]).item(), 4.0);
     /// assert_eq!(b.get(vec![1,1]).item(), 16.0);
@@ -275,11 +302,11 @@ where
     /// use tinygrad_rs::Tensor;
     /// use tinygrad_rs::Data;
     /// use tinygrad_rs::data;
-    /// 
+    ///
     /// let a = Tensor::with_data(vec![2,2], data![1.0, 2.0, 3.0, 4.0]);
     /// let b = Tensor::with_data(vec![2,2], data![2.0, 4.0, 8.0, 16.0]);
     /// let c = a.sub(&b);
-    /// 
+    ///
     /// // Previous tensors remain unchanged
     /// assert_eq!(a.get(vec![1,1]).item(), 4.0);
     /// assert_eq!(b.get(vec![1,1]).item(), 16.0);
@@ -291,22 +318,170 @@ where
         self.add(&rhs.neg())
     }
 
+    /// Return a tensor with the data negated. Results in a new tensor.
+    /// use `Tensor.neg_()` to negate the tensor in place
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    /// use tinygrad_rs::Data;
+    /// use tinygrad_rs::data;
+    ///
+    /// let a = Tensor::with_data(vec![2,2], data![1.0, 2.0, 3.0, 4.0]);
+    /// let c = a.neg();
+    ///
+    /// // Previous tensors remain unchanged
+    /// assert_eq!(a.get(vec![1,1]).item(), 4.0);
+    ///
+    /// // Negation results in new tensor
+    /// assert_eq!(c.get(vec![1,1]).item(), -4.0);
+    /// ```
     pub fn neg(&self) -> Tensor<T> {
-        let data = self.get_data().iter().map(|d| Data::new(-d.get())).collect();
-        
+        let data = self
+            .get_data()
+            .iter()
+            .map(|d| Data::new(-d.get()))
+            .collect();
+
         Tensor::with_data(self.get_dim(), data)
     }
-    
+
+    /// Return a tensor with the data negated. Results in a new tensor.
+    /// use `Tensor.neg()` return a new tensor with the data negated
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    /// use tinygrad_rs::Data;
+    /// use tinygrad_rs::data;
+    ///
+    /// let a = Tensor::with_data(vec![2,2], data![1.0, 2.0, 3.0, 4.0]);
+    /// a.neg_();
+    ///
+    /// assert_eq!(a.get(vec![1,1]).item(), -4.0);
+    /// ```
     pub fn neg_(&self) {
         self.get_data().iter().for_each(|d| d.set(-d.get()));
     }
 
+    /// Element-wise multiplication of tensors. Multiplying by a scalar is also
+    /// possible (needs to be wrapped in a Tensor)
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    /// use tinygrad_rs::Data;
+    /// use tinygrad_rs::data;
+    ///
+    /// let a = Tensor::with_data(vec![2,2], data![1.0, 2.0, 3.0, 4.0]);
+    /// let b = Tensor::with_data(vec![2,2], data![1.0, 2.0, 3.0, 4.0]);
+    /// let scalar = Tensor::with_data(vec![1], data![2.0]);
+    ///
+    /// let ab = a.mul(&b);
+    /// assert_eq!(ab.get(vec![1,1]).item(), 16.0);
+    ///
+    /// let ascalar = a.mul(&scalar);
+    /// assert_eq!(ascalar.get(vec![1,1]).item(), 8.0);
+    /// ```
     pub fn mul(&self, rhs: &Tensor<T>) -> Tensor<T> {
-        unimplemented!()
+        assert!(
+            self.shape() == rhs.shape() || (rhs.shape().len() == 1 && rhs.shape()[0] == 1),
+            "Tensor shapes do not match or are not scalar"
+        );
+
+        let data: Vec<Data<T>>;
+
+        if self.shape() == rhs.shape() {
+            data = self
+                .get_data()
+                .iter()
+                .zip(rhs.get_data().iter())
+                .map(|(x, y)| Data::new(x.get() * y.get()))
+                .collect();
+        } else {
+            data = self
+                .get_data()
+                .iter()
+                .map(|x| Data::new(x.get() * rhs.item().get()))
+                .collect();
+        }
+
+        Tensor::with_data(self.shape(), data)
     }
 
+    /// Matrix multiplication of tensors
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    /// use tinygrad_rs::Data;
+    /// use tinygrad_rs::data;
+    ///
+    /// let a = Tensor::with_data(vec![2,2], data![1.0, 2.0, 3.0, 4.0]);
+    /// let b = Tensor::with_data(vec![2,2], data![1.0, 2.0, 3.0, 4.0]);
+    ///
+    /// let ab = a.matmul(&b);
+    /// assert_eq!(ab.get(vec![0,0]).item(), 7.0);
+    /// assert_eq!(ab.get(vec![1,1]).item(), 22.0);
+    /// ```
     pub fn matmul(&self, rhs: &Tensor<T>) -> Tensor<T> {
-        unimplemented!()
+        assert!(!self.shape().is_empty() && !rhs.shape().is_empty());
+
+        if self.shape().len() == 1 && self.shape() == rhs.shape() {
+            let mut sum = Default::default();
+
+            for i in 0..self.shape()[0] {
+                sum = sum + (self.get(vec![i]).item() * rhs.get(vec![i]).item()).get();
+            }
+
+            let data = vec![Data::new(sum)];
+            let dim = vec![1];
+
+            Tensor::with_data(dim, data)
+        } else if rhs.shape().len() == 1 && *self.shape().last().unwrap() == rhs.shape()[0] {
+            let data = self
+                .get_data()
+                .chunks(rhs.shape()[0])
+                .map(|c| {
+                    Tensor::with_data(rhs.shape(), c.into_iter().map(|d| d.clone()).collect())
+                        .matmul(rhs)
+                        .get_data()
+                })
+                .flatten()
+                .collect();
+
+            let mut dim = self.shape();
+            dim.pop();
+
+            Tensor::with_data(dim, data)
+        } else if self.shape().len() == 1 && *rhs.shape().last().unwrap() == self.shape()[0] {
+            unimplemented!()
+        } else if self.shape().len() == 2
+            && rhs.shape().len() == 2
+            && self.shape()[1] == rhs.shape()[0]
+        {
+            let mut data = Vec::new();
+
+            for i in 0..self.shape()[1] {
+                let a = self.get_slice(vec![i as isize, -1]);
+
+                for j in 0..rhs.shape()[1] {
+                    let b = rhs.get_slice(vec![-1, j as isize]);
+
+                    data.extend(a.matmul(&b).get_data());
+                }
+            }
+
+            let dim = vec![self.shape()[0], rhs.shape()[1]];
+
+            Tensor::with_data(dim, data)
+        } else {
+            panic!("cannot perform matmul on provided tensors");
+        }
     }
 
     pub fn batch_matmul(&self, rhs: &Tensor<T>) -> Tensor<T> {
