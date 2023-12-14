@@ -408,7 +408,8 @@ where
         Tensor::with_data(self.shape(), data)
     }
 
-    /// Matrix multiplication of tensors
+    /// Matrix multiplication of tensors. Roughly implemented. A lot of
+    /// conditions still need to be handled, as well as broadcasting
     ///
     /// # Example
     ///
@@ -454,6 +455,7 @@ where
 
             Tensor::with_data(dim, data)
         } else if self.shape().len() == 1 && *rhs.shape().last().unwrap() == self.shape()[0] {
+            // need broadcasting
             unimplemented!()
         } else if self.shape().len() == 2
             && rhs.shape().len() == 2
@@ -474,13 +476,90 @@ where
             let dim = vec![self.shape()[0], rhs.shape()[1]];
 
             Tensor::with_data(dim, data)
+        } else if self.shape().len() > 2
+            && rhs.shape().len() > 2
+            && self.shape()[1] == rhs.shape()[0]
+        {
+            assert_eq!(
+                self.shape()[0..self.shape().len() - 2],
+                rhs.shape()[0..self.shape().len() - 2]
+            );
+
+            let mut dim = self.shape()[0..self.shape().len() - 2].to_vec();
+            let mut data = Vec::new();
+            let mat_shape = &self.shape()[self.shape().len() - 2..].to_vec();
+            let mat_size: usize = mat_shape.iter().product();
+
+            for i in 0..dim.iter().product::<usize>() {
+                let imat = Tensor::with_data(
+                    mat_shape.to_owned(),
+                    self.get_data()[i * mat_size..mat_size * (i + 1)].to_vec(),
+                )
+                .matmul(&Tensor::with_data(
+                    mat_shape.to_owned(),
+                    rhs.get_data()[i * mat_size..mat_size * (i + 1)].to_vec(),
+                ));
+
+                data.extend(imat.get_data());
+            }
+
+            dim.extend(mat_shape);
+
+            Tensor::with_data(dim, data)
         } else {
             panic!("cannot perform matmul on provided tensors");
         }
     }
 
-    pub fn batch_matmul(&self, _rhs: &Tensor<T>) -> Tensor<T> {
-        unimplemented!()
+    /// Batch matrix multiplication of tensors. Roughly implemented. Will
+    /// not support broadcasting
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    /// use tinygrad_rs::Data;
+    /// use tinygrad_rs::data;
+    ///
+    /// let a = Tensor::with_data(vec![2,2,2], data![1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0]);
+    /// let b = Tensor::with_data(vec![2,2,2], data![1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0]);
+    ///
+    /// let ab = a.bmm(&b);
+    /// assert_eq!(ab.get(vec![0,0,0]).item(), 7.0);
+    /// assert_eq!(ab.get(vec![1,1,1]).item(), 22.0);
+    /// ```
+    pub fn bmm(&self, rhs: &Tensor<T>) -> Tensor<T> {
+        assert_eq!(
+            self.shape()[0..self.shape().len() - 2],
+            rhs.shape()[0..self.shape().len() - 2]
+        );
+
+        let mut dim = self.shape()[0..self.shape().len() - 2].to_vec();
+
+        if dim.is_empty() {
+            return self.matmul(rhs);
+        }
+
+        let mut data = Vec::new();
+        let mat_shape = &self.shape()[self.shape().len() - 2..].to_vec();
+        let mat_size: usize = mat_shape.iter().product();
+
+        for i in 0..dim.iter().product::<usize>() {
+            let imat = Tensor::with_data(
+                mat_shape.to_owned(),
+                self.get_data()[i * mat_size..mat_size * (i + 1)].to_vec(),
+            )
+            .matmul(&Tensor::with_data(
+                mat_shape.to_owned(),
+                rhs.get_data()[i * mat_size..mat_size * (i + 1)].to_vec(),
+            ));
+
+            data.extend(imat.get_data());
+        }
+
+        dim.extend(mat_shape);
+
+        Tensor::with_data(dim, data)
     }
 
     fn stride(&self, index: Vec<usize>) -> usize {
