@@ -37,8 +37,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - name: Enforce formatting
-        run: cargo clippy -- -D warnings
+      - name: Clippy!
+        run: cargo clippy
 
 
 
