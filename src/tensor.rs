@@ -561,6 +561,22 @@ where
 
         Tensor::with_data(dim, data)
     }
+    
+    pub fn div(&self, rhs: &Tensor<T>) -> Tensor<T> {
+        unimplemented!()
+    }
+    
+    pub fn pow(&self, pow: f64) -> Tensor<T> {
+        unimplemented!()
+    }
+
+    pub fn exp(&self) -> Tensor<T> {
+        unimplemented!()
+    }
+
+    pub fn tanh(&self) -> Tensor<T> {
+        unimplemented!()
+    }
 
     fn stride(&self, index: Vec<usize>) -> usize {
         index
