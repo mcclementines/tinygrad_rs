@@ -7,13 +7,6 @@ macro_rules! data {
     );
 }
 
-/// Initializes a Tensor::with_data() in a user friendly way
-macro_rules! tensor {
-    () => {
-        Tensor::new(vec![1], 0.0)
-    };
-}
-
 #[macro_export]
 macro_rules! tslice {
     ($($x:tt),+) => {{

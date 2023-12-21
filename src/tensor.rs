@@ -421,7 +421,7 @@ impl Tensor {
             let mut sum = Default::default();
 
             for i in 0..self.shape()[0] {
-                sum = sum + (self.get(vec![i]).item() * rhs.get(vec![i]).item()).get();
+                sum += (self.get(vec![i]).item() * rhs.get(vec![i]).item()).get();
             }
 
             let data = vec![Data::new(sum)];
@@ -569,7 +569,7 @@ impl Tensor {
     pub fn div(&self, rhs: &Tensor) -> Tensor {
         let denominator = rhs.pow(-1.0);
 
-        return self.mul(&denominator);
+        self.mul(&denominator)
     }
 
     /// Raise data of tensor to specified power
