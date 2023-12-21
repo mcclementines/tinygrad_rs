@@ -267,22 +267,18 @@ impl Tensor {
             "Tensor shapes do not match or are not scalar"
         );
 
-        let data: Vec<Data>;
-
-        if rhs.shape().len() == 1 && rhs.shape()[0] == 1 {
-            data = self
-                .get_data()
+        let data: Vec<Data> = if rhs.shape().len() == 1 && rhs.shape()[0] == 1 {
+            self.get_data()
                 .iter()
                 .map(|d| Data::new(d.get() + rhs.get(vec![0]).item().get()))
-                .collect::<Vec<Data>>();
+                .collect::<Vec<Data>>()
         } else {
-            data = self
-                .get_data()
+            self.get_data()
                 .iter()
                 .zip(rhs.get_data())
                 .map(|(l, r)| Data::new(l.get() + r.get()))
-                .collect::<Vec<Data>>();
-        }
+                .collect::<Vec<Data>>()
+        };
 
         Tensor::with_data(self.get_dim(), data)
     }
@@ -667,10 +663,6 @@ impl Tensor {
 
     fn get_dim(&self) -> Vec<usize> {
         self.0.borrow().dim.to_owned()
-    }
-
-    fn set_dim(&mut self, dim: Vec<usize>) {
-        self.0.borrow_mut().dim = dim;
     }
 
     fn get_strides(&self) -> Vec<usize> {
