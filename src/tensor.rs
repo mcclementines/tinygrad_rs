@@ -2,6 +2,8 @@
 
 use std::{cell::RefCell, rc::Rc, usize};
 
+use rand::Rng;
+
 use crate::Data;
 
 /// Represents a Tensor
@@ -41,7 +43,7 @@ impl Tensor {
     /// ```
     pub fn new(dim: Vec<usize>) -> Tensor {
         let mut data = Vec::new();
-        data.resize(dim.iter().product(), Data::new(0.0));
+        data.resize(dim.iter().product(), Data::new(Default::default()));
 
         let mut stride: usize = dim.iter().product();
         let strides: Vec<usize> = dim
@@ -86,6 +88,27 @@ impl Tensor {
         tensor.set_data(data);
 
         tensor
+    }
+
+    /// Constructs a new Tensor with specified dimensions and random data
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    /// use tinygrad_rs::Data;
+    /// use tinygrad_rs::data;
+    ///
+    /// let tensor = Tensor::randn(vec![2,2]);
+    /// ```
+    pub fn randn(dim: Vec<usize>) -> Tensor {
+        let mut rng = rand::thread_rng();
+
+        let size = dim.iter().product();
+        let mut data = Vec::with_capacity(size);
+        data.resize(size, Data::new(rng.gen()));
+
+        Tensor::with_data(dim, data)
     }
 
     /// Get the Tensor value located at the specified index
@@ -240,19 +263,26 @@ impl Tensor {
     /// ```
     pub fn add(&self, rhs: &Tensor) -> Tensor {
         assert!(
-            self.get_dim()
-                .iter()
-                .zip(rhs.get_dim())
-                .all(|(&l, r)| l == r),
-            "Tensor dimensions do not match. Cannot add"
+            self.shape() == rhs.shape() || (rhs.shape().len() == 1 && rhs.shape()[0] == 1),
+            "Tensor shapes do not match or are not scalar"
         );
 
-        let data = self
-            .get_data()
-            .iter()
-            .zip(rhs.get_data())
-            .map(|(l, r)| Data::new(l.get() + r.get()))
-            .collect::<Vec<Data>>();
+        let data: Vec<Data>;
+
+        if rhs.shape().len() == 1 && rhs.shape()[0] == 1 {
+            data = self
+                .get_data()
+                .iter()
+                .map(|d| Data::new(d.get() + rhs.get(vec![0]).item().get()))
+                .collect::<Vec<Data>>();
+        } else {
+            data = self
+                .get_data()
+                .iter()
+                .zip(rhs.get_data())
+                .map(|(l, r)| Data::new(l.get() + r.get()))
+                .collect::<Vec<Data>>();
+        }
 
         Tensor::with_data(self.get_dim(), data)
     }
@@ -525,22 +555,97 @@ impl Tensor {
         Tensor::with_data(dim, data)
     }
 
+    /// Divide tensor by another tensor
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    /// use tinygrad_rs::Data;
+    /// use tinygrad_rs::data;
+    ///
+    /// let ta = Tensor::with_data(vec![2,2], data![2.0,2.0,2.0,2.0]);
+    /// let tb = Tensor::with_data(vec![2,2], data![2.0,2.0,2.0,2.0]);
+    /// let result = ta.div(&tb);
+    ///
+    /// assert_eq!(result.get(vec![1,1]).item(), 1.0);
+    /// ```
     pub fn div(&self, rhs: &Tensor) -> Tensor {
         let denominator = rhs.pow(-1.0);
 
         return self.mul(&denominator);
     }
 
+    /// Raise data of tensor to specified power
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    /// use tinygrad_rs::Data;
+    /// use tinygrad_rs::data;
+    ///
+    /// let tensor = Tensor::with_data(vec![2,2], data![2.0,2.0,2.0,2.0]);
+    /// let tensor_sq = tensor.pow(2.0);
+    ///
+    /// assert_eq!(tensor_sq.get(vec![1,1]).item(), 4.0);
+    /// ```
     pub fn pow(&self, pow: f64) -> Tensor {
-        unimplemented!()
+        let data = self
+            .get_data()
+            .iter()
+            .map(|d| Data::new(d.get().powf(pow)))
+            .collect();
+
+        Tensor::with_data(self.shape(), data)
     }
 
+    /// Compute the exponential of each element
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    /// use tinygrad_rs::Data;
+    /// use tinygrad_rs::data;
+    ///
+    /// let tensor = Tensor::with_data(vec![2,2], data![2.0,2.0,2.0,2.0]);
+    /// let tensor_exp = tensor.exp();
+    ///
+    /// assert_eq!(tensor_exp.get(vec![1,1]).item(), 7.38905609893065);
+    /// ```
     pub fn exp(&self) -> Tensor {
-        unimplemented!()
+        let data = self
+            .get_data()
+            .iter()
+            .map(|d| Data::new(d.get().exp()))
+            .collect();
+
+        Tensor::with_data(self.shape(), data)
     }
 
+    /// Compute the tanh of each element
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    /// use tinygrad_rs::Data;
+    /// use tinygrad_rs::data;
+    ///
+    /// let tensor = Tensor::with_data(vec![2,2], data![2.0,2.0,2.0,2.0]);
+    /// let tensor_tanh = tensor.tanh();
+    ///
+    /// assert_eq!(tensor_tanh.get(vec![1,1]).item(), 0.9640275800758169);
+    /// ```
     pub fn tanh(&self) -> Tensor {
-        unimplemented!()
+        let scalar1 = Tensor::with_data(vec![1], data![1.0]);
+        let scalar2 = Tensor::with_data(vec![1], data![2.0]);
+
+        let numerator = (self.mul(&scalar2)).exp().sub(&scalar1);
+        let denominator = (self.mul(&scalar2)).exp().add(&scalar1);
+
+        numerator.div(&denominator)
     }
 
     fn stride(&self, index: Vec<usize>) -> usize {
