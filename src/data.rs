@@ -1,39 +1,15 @@
 //! src/data.rs
 
 use std::fmt::Debug;
-use std::iter::Sum;
-use std::ops::{Add, Div, Mul, Neg, Sub};
+use std::ops::Mul;
 use std::{cell::RefCell, rc::Rc};
 
 /// Data object used in tinygrad_rs
 ///
 #[derive(Clone, Debug)]
-pub struct Data<
-    T: Clone
-        + Copy
-        + Debug
-        + Default
-        + Add<Output = T>
-        + Sub<Output = T>
-        + Mul<Output = T>
-        + Div<Output = T>
-        + Neg<Output = T>
-        + Sum,
->(pub Rc<RefCell<T>>);
+pub struct Data(pub Rc<RefCell<f64>>);
 
-impl<T> Data<T>
-where
-    T: Clone
-        + Copy
-        + Debug
-        + Default
-        + Add<Output = T>
-        + Sub<Output = T>
-        + Mul<Output = T>
-        + Div<Output = T>
-        + Neg<Output = T>
-        + Sum,
-{
+impl Data {
     /// A `Data` object in the `tinygrad_rs` library.
     ///
     /// # Examples
@@ -52,11 +28,11 @@ where
     /// // Perform operations or transformations on `data` as needed
     /// // ...
     /// ```
-    pub fn new(data: T) -> Data<T> {
+    pub fn new(data: f64) -> Data {
         Data(Rc::new(RefCell::new(data)))
     }
 
-    pub fn from_vec(data: Vec<T>) -> Vec<Data<T>> {
+    pub fn from_vec(data: Vec<f64>) -> Vec<Data> {
         data.iter().map(|x| Data::new(*x)).collect()
     }
 
@@ -82,7 +58,7 @@ where
     /// // Check that the retrieved value matches the expected value
     /// assert_eq!(value, 1.0);
     /// ```
-    pub fn get(&self) -> T {
+    pub fn get(&self) -> f64 {
         self.0.borrow().to_owned()
     }
 
@@ -107,71 +83,33 @@ where
     /// // Check that the value has been updated correctly
     /// assert_eq!(data.get(), 2.0);
     /// ```
-    pub fn set(&self, data: T) {
+    pub fn set(&self, data: f64) {
         *self.0.borrow_mut() = data;
     }
 }
 
-impl<T> Mul for Data<T>
-where
-    T: Clone
-        + Copy
-        + Debug
-        + Default
-        + Add<Output = T>
-        + Sub<Output = T>
-        + Mul<Output = T>
-        + Div<Output = T>
-        + Neg<Output = T>
-        + Sum,
-{
-    type Output = Data<T>;
+impl Mul for Data {
+    type Output = Data;
 
-    fn mul(self, rhs: Data<T>) -> Data<T> {
+    fn mul(self, rhs: Data) -> Data {
         Data::new(self.get() * rhs.get())
     }
 }
 
-impl<
-        T: Clone
-            + Copy
-            + Debug
-            + Default
-            + Add<Output = T>
-            + Sub<Output = T>
-            + Mul<Output = T>
-            + Div<Output = T>
-            + Neg<Output = T>
-            + Sum
-            + PartialEq,
-    > PartialEq for Data<T>
-{
+impl PartialEq for Data {
     fn eq(&self, other: &Self) -> bool {
         self.get() == other.get()
     }
 }
 
-impl<
-        T: Clone
-            + Copy
-            + Debug
-            + Default
-            + Add<Output = T>
-            + Sub<Output = T>
-            + Mul<Output = T>
-            + Div<Output = T>
-            + Neg<Output = T>
-            + Sum
-            + PartialEq,
-    > PartialEq<T> for Data<T>
-{
-    fn eq(&self, other: &T) -> bool {
+impl PartialEq<f64> for Data {
+    fn eq(&self, other: &f64) -> bool {
         self.get() == *other
     }
 }
 
-impl PartialEq<Data<f32>> for f32 {
-    fn eq(&self, other: &Data<f32>) -> bool {
+impl PartialEq<Data> for f64 {
+    fn eq(&self, other: &Data) -> bool {
         *self == other.get()
     }
 }

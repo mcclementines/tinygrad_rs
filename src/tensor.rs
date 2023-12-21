@@ -1,8 +1,5 @@
 //! src/tensor.rs
 
-use std::fmt::Debug;
-use std::iter::Sum;
-use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::{cell::RefCell, rc::Rc, usize};
 
 use crate::Data;
@@ -15,57 +12,23 @@ use crate::Data;
 /// use tinygrad_rs::Tensor;
 /// use tinygrad_rs::Data;
 ///
-/// let mut tensor = Tensor::new(vec![2, 2], 0.0);
+/// let mut tensor = Tensor::new(vec![2, 2]);
 /// tensor.set(vec![0,0], Data::new(1.0));
 /// tensor.set(vec![1,1], Data::new(4.0));
 ///
 /// assert_eq!(tensor.get(vec![0,0]).item(), 1.0);
 /// assert_eq!(tensor.get(vec![1,1]).item(), 4.0);
 /// ```
-pub struct Tensor<
-    T: Clone
-        + Copy
-        + Debug
-        + Default
-        + Add<Output = T>
-        + Sub<Output = T>
-        + Mul<Output = T>
-        + Div<Output = T>
-        + Neg<Output = T>
-        + Sum,
->(Rc<RefCell<TensorData<T>>>);
+pub struct Tensor(Rc<RefCell<TensorData>>);
 
-struct TensorData<
-    T: Clone
-        + Copy
-        + Debug
-        + Default
-        + Add<Output = T>
-        + Sub<Output = T>
-        + Mul<Output = T>
-        + Div<Output = T>
-        + Neg<Output = T>
-        + Sum,
-> {
-    data: Vec<Data<T>>,
+struct TensorData {
+    data: Vec<Data>,
     dim: Vec<usize>,
     strides: Vec<usize>,
     offset: usize,
 }
 
-impl<T> Tensor<T>
-where
-    T: Clone
-        + Copy
-        + Debug
-        + Default
-        + Add<Output = T>
-        + Sub<Output = T>
-        + Mul<Output = T>
-        + Div<Output = T>
-        + Neg<Output = T>
-        + Sum,
-{
+impl Tensor {
     /// Create a new Tensor with specified dimensions. Values are initialized
     /// at 0.0
     ///
@@ -74,11 +37,11 @@ where
     /// ```
     /// use tinygrad_rs::Tensor;
     ///
-    /// let tensor = Tensor::new(vec![2,2], 0.0);
+    /// let tensor = Tensor::new(vec![2,2]);
     /// ```
-    pub fn new(dim: Vec<usize>, initial_element: T) -> Tensor<T> {
+    pub fn new(dim: Vec<usize>) -> Tensor {
         let mut data = Vec::new();
-        data.resize(dim.iter().product(), Data::new(initial_element));
+        data.resize(dim.iter().product(), Data::new(0.0));
 
         let mut stride: usize = dim.iter().product();
         let strides: Vec<usize> = dim
@@ -113,13 +76,13 @@ where
     ///
     /// let tensor = Tensor::with_data(vec![2, 1], data![1.0, 2.0]);
     /// ```
-    pub fn with_data(dim: Vec<usize>, data: Vec<Data<T>>) -> Tensor<T> {
+    pub fn with_data(dim: Vec<usize>, data: Vec<Data>) -> Tensor {
         assert!(
             dim.iter().product::<usize>() <= data.len(),
             "Data does not fit specified dimensions"
         );
 
-        let tensor = Tensor::new(dim, data[0].get());
+        let tensor = Tensor::new(dim);
         tensor.set_data(data);
 
         tensor
@@ -132,12 +95,12 @@ where
     /// ```
     /// use tinygrad_rs::Tensor;
     ///
-    /// let tensor = Tensor::new(vec![2,1], 0.0);
+    /// let tensor = Tensor::new(vec![2,1]);
     /// let value = tensor.get(vec![1,0]).item();
     ///
     /// assert_eq!(value, 0.0);
     /// ```
-    pub fn get(&self, index: Vec<usize>) -> Tensor<T> {
+    pub fn get(&self, index: Vec<usize>) -> Tensor {
         // TODO: To be replaced when I have time, quick and dirty solution
         // # of dim == index coords
         assert_eq!(
@@ -175,7 +138,7 @@ where
     /// assert_eq!(slice.get(vec![0,0]).item(), 1.0);
     /// assert_eq!(slice.get(vec![1,1]).item(), 6.0);
     /// ```
-    pub fn get_slice(&self, slice: Vec<isize>) -> Tensor<T> {
+    pub fn get_slice(&self, slice: Vec<isize>) -> Tensor {
         let mut dim: Vec<usize> = Vec::new();
         let mut strides: Vec<usize> = Vec::new();
         let mut offset: usize = 0;
@@ -209,12 +172,12 @@ where
     /// use tinygrad_rs::Tensor;
     /// use tinygrad_rs::Data;
     ///
-    /// let mut tensor = Tensor::new(vec![2,1], 0.0);
+    /// let mut tensor = Tensor::new(vec![2,1]);
     /// tensor.set(vec![1,0], Data::new(1.0));
     ///
     /// assert_eq!(tensor.get(vec![1,0]).item(), 1.0);
     /// ```
-    pub fn set(&mut self, index: Vec<usize>, value: Data<T>) {
+    pub fn set(&mut self, index: Vec<usize>, value: Data) {
         let stride = self.stride(index);
 
         self.0.borrow_mut().data[stride] = value;
@@ -227,7 +190,7 @@ where
     /// ```
     /// use tinygrad_rs::Tensor;
     ///
-    /// let mut tensor = Tensor::new(vec![2,2], 0.0);
+    /// let mut tensor = Tensor::new(vec![2,2]);
     /// let shape = tensor.shape();
     ///
     /// assert_eq!(shape, vec![2,2]);
@@ -248,7 +211,7 @@ where
     ///
     /// assert_eq!(tensor.item(), 2.0);
     /// ```
-    pub fn item(&self) -> Data<T> {
+    pub fn item(&self) -> Data {
         match self.0.borrow().data.len() == 1 {
             true => self.0.borrow().data[0].to_owned(),
             false => panic!("Tensor references multiple pieces of Data"),
@@ -275,7 +238,7 @@ where
     /// // Addition results in new tensor
     /// assert_eq!(c.get(vec![1,1]).item(), 20.0);
     /// ```
-    pub fn add(&self, rhs: &Tensor<T>) -> Tensor<T> {
+    pub fn add(&self, rhs: &Tensor) -> Tensor {
         assert!(
             self.get_dim()
                 .iter()
@@ -288,8 +251,8 @@ where
             .get_data()
             .iter()
             .zip(rhs.get_data())
-            .map(|(l, r)| Data::<T>::new(l.get() + r.get()))
-            .collect::<Vec<Data<T>>>();
+            .map(|(l, r)| Data::new(l.get() + r.get()))
+            .collect::<Vec<Data>>();
 
         Tensor::with_data(self.get_dim(), data)
     }
@@ -314,7 +277,7 @@ where
     /// // Addition results in new tensor
     /// assert_eq!(c.get(vec![1,1]).item(), -12.0);
     /// ```
-    pub fn sub(&self, rhs: &Tensor<T>) -> Tensor<T> {
+    pub fn sub(&self, rhs: &Tensor) -> Tensor {
         self.add(&rhs.neg())
     }
 
@@ -337,7 +300,7 @@ where
     /// // Negation results in new tensor
     /// assert_eq!(c.get(vec![1,1]).item(), -4.0);
     /// ```
-    pub fn neg(&self) -> Tensor<T> {
+    pub fn neg(&self) -> Tensor {
         let data = self
             .get_data()
             .iter()
@@ -386,13 +349,13 @@ where
     /// let ascalar = a.mul(&scalar);
     /// assert_eq!(ascalar.get(vec![1,1]).item(), 8.0);
     /// ```
-    pub fn mul(&self, rhs: &Tensor<T>) -> Tensor<T> {
+    pub fn mul(&self, rhs: &Tensor) -> Tensor {
         assert!(
             self.shape() == rhs.shape() || (rhs.shape().len() == 1 && rhs.shape()[0] == 1),
             "Tensor shapes do not match or are not scalar"
         );
 
-        let data: Vec<Data<T>> = if self.shape() == rhs.shape() {
+        let data: Vec<Data> = if self.shape() == rhs.shape() {
             self.get_data()
                 .iter()
                 .zip(rhs.get_data().iter())
@@ -425,7 +388,7 @@ where
     /// assert_eq!(ab.get(vec![0,0]).item(), 7.0);
     /// assert_eq!(ab.get(vec![1,1]).item(), 22.0);
     /// ```
-    pub fn matmul(&self, rhs: &Tensor<T>) -> Tensor<T> {
+    pub fn matmul(&self, rhs: &Tensor) -> Tensor {
         assert!(!self.shape().is_empty() && !rhs.shape().is_empty());
 
         if self.shape().len() == 1 && self.shape() == rhs.shape() {
@@ -528,7 +491,7 @@ where
     /// assert_eq!(ab.get(vec![0,0,0]).item(), 7.0);
     /// assert_eq!(ab.get(vec![1,1,1]).item(), 22.0);
     /// ```
-    pub fn bmm(&self, rhs: &Tensor<T>) -> Tensor<T> {
+    pub fn bmm(&self, rhs: &Tensor) -> Tensor {
         assert_eq!(
             self.shape()[0..self.shape().len() - 2],
             rhs.shape()[0..self.shape().len() - 2]
@@ -561,20 +524,22 @@ where
 
         Tensor::with_data(dim, data)
     }
-    
-    pub fn div(&self, rhs: &Tensor<T>) -> Tensor<T> {
-        unimplemented!()
+
+    pub fn div(&self, rhs: &Tensor) -> Tensor {
+        let denominator = rhs.pow(-1.0);
+
+        return self.mul(&denominator);
     }
-    
-    pub fn pow(&self, pow: f64) -> Tensor<T> {
+
+    pub fn pow(&self, pow: f64) -> Tensor {
         unimplemented!()
     }
 
-    pub fn exp(&self) -> Tensor<T> {
+    pub fn exp(&self) -> Tensor {
         unimplemented!()
     }
 
-    pub fn tanh(&self) -> Tensor<T> {
+    pub fn tanh(&self) -> Tensor {
         unimplemented!()
     }
 
@@ -587,11 +552,11 @@ where
             + self.get_offset()
     }
 
-    fn get_data(&self) -> Vec<Data<T>> {
+    fn get_data(&self) -> Vec<Data> {
         self.0.borrow().data.to_owned()
     }
 
-    fn set_data(&self, data: Vec<Data<T>>) {
+    fn set_data(&self, data: Vec<Data>) {
         self.0.borrow_mut().data = data;
     }
 
