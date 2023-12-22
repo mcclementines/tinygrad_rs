@@ -21,9 +21,9 @@ use crate::Data;
 /// assert_eq!(tensor.get(vec![0,0]).item(), 1.0);
 /// assert_eq!(tensor.get(vec![1,1]).item(), 4.0);
 /// ```
-pub struct Tensor(Rc<RefCell<TensorData>>);
+pub struct Tensor(Rc<RefCell<InnerTensor>>);
 
-struct TensorData {
+struct InnerTensor {
     data: Vec<Data>,
     dim: Vec<usize>,
     strides: Vec<usize>,
@@ -56,7 +56,7 @@ impl Tensor {
 
         let offset = 0;
 
-        let tensor_data = TensorData {
+        let tensor_data = InnerTensor {
             data,
             dim,
             strides,

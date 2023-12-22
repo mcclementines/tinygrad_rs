@@ -7,7 +7,13 @@ use std::{cell::RefCell, rc::Rc};
 /// Data object used in tinygrad_rs
 ///
 #[derive(Clone, Debug)]
-pub struct Data(pub Rc<RefCell<f64>>);
+pub struct Data(Rc<RefCell<InnerData>>);
+
+#[derive(Clone, Debug)]
+struct InnerData {
+    data: f64,
+    grad: f64,
+}
 
 impl Data {
     /// A `Data` object in the `tinygrad_rs` library.
@@ -29,6 +35,8 @@ impl Data {
     /// // ...
     /// ```
     pub fn new(data: f64) -> Data {
+        let data = InnerData { data, grad: 0.0 };
+
         Data(Rc::new(RefCell::new(data)))
     }
 
@@ -59,7 +67,7 @@ impl Data {
     /// assert_eq!(value, 1.0);
     /// ```
     pub fn get(&self) -> f64 {
-        self.0.borrow().to_owned()
+        self.0.borrow().to_owned().data
     }
 
     /// Sets the raw data value for a `Data` instance.
@@ -84,7 +92,7 @@ impl Data {
     /// assert_eq!(data.get(), 2.0);
     /// ```
     pub fn set(&self, data: f64) {
-        *self.0.borrow_mut() = data;
+        self.0.borrow_mut().data = data;
     }
 }
 
