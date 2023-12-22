@@ -67,7 +67,7 @@ impl Data {
     /// assert_eq!(value, 1.0);
     /// ```
     pub fn get(&self) -> f64 {
-        self.0.borrow().to_owned().data
+        self.0.borrow().data.to_owned()
     }
 
     /// Sets the raw data value for a `Data` instance.
@@ -93,6 +93,38 @@ impl Data {
     /// ```
     pub fn set(&self, data: f64) {
         self.0.borrow_mut().data = data;
+    }
+
+    /// Gets the grad associated with the data
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tinygrad_rs::Data;
+    ///
+    /// let data = Data::new(2.0);
+    /// data.set_grad(1.0);
+    ///
+    /// assert_eq!(data.get_grad(), 1.0);
+    /// ```
+    pub fn get_grad(&self) -> f64 {
+        self.0.borrow().grad.to_owned()
+    }
+
+    /// Sets the grad associated with the data
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tinygrad_rs::Data;
+    ///
+    /// let data = Data::new(2.0);
+    /// data.set_grad(1.0);
+    ///
+    /// assert_eq!(data.get_grad(), 1.0);
+    /// ```
+    pub fn set_grad(&self, grad: f64) {
+        self.0.borrow_mut().grad = grad;
     }
 }
 

@@ -28,6 +28,9 @@ struct InnerTensor {
     dim: Vec<usize>,
     strides: Vec<usize>,
     offset: usize,
+
+    requires_grad: bool,
+    backward: Box<dyn Fn()>,
 }
 
 impl Tensor {
@@ -55,12 +58,16 @@ impl Tensor {
             .collect();
 
         let offset = 0;
+        let requires_grad = false;
+        let backward = Box::new(|| {});
 
         let tensor_data = InnerTensor {
             data,
             dim,
             strides,
             offset,
+            requires_grad,
+            backward,
         };
 
         Tensor(Rc::new(RefCell::new(tensor_data)))
@@ -90,14 +97,27 @@ impl Tensor {
         tensor
     }
 
+    /// Constructs a tensor with a single value
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    ///
+    /// let tensor = Tensor::scalar(2.0);
+    ///
+    /// assert_eq!(tensor.item(), 2.0);
+    /// ```
+    pub fn scalar(data: f64) -> Tensor {
+        Tensor::with_data(vec![1], data![data])
+    }
+
     /// Constructs a new Tensor with specified dimensions and random data
     ///
     /// # Example
     ///
     /// ```
     /// use tinygrad_rs::Tensor;
-    /// use tinygrad_rs::Data;
-    /// use tinygrad_rs::data;
     ///
     /// let tensor = Tensor::randn(vec![2,2]);
     /// ```
@@ -180,7 +200,7 @@ impl Tensor {
                 }
             });
 
-        let mut tensor = Tensor::with_data(dim, self.get_data());
+        let tensor = Tensor::with_data(dim, self.get_data());
         tensor.set_strides(strides);
         tensor.set_offset(offset);
 
@@ -195,12 +215,12 @@ impl Tensor {
     /// use tinygrad_rs::Tensor;
     /// use tinygrad_rs::Data;
     ///
-    /// let mut tensor = Tensor::new(vec![2,1]);
+    /// let tensor = Tensor::new(vec![2,1]);
     /// tensor.set(vec![1,0], Data::new(1.0));
     ///
     /// assert_eq!(tensor.get(vec![1,0]).item(), 1.0);
     /// ```
-    pub fn set(&mut self, index: Vec<usize>, value: Data) {
+    pub fn set(&self, index: Vec<usize>, value: Data) {
         let stride = self.stride(index);
 
         self.0.borrow_mut().data[stride] = value;
@@ -213,7 +233,7 @@ impl Tensor {
     /// ```
     /// use tinygrad_rs::Tensor;
     ///
-    /// let mut tensor = Tensor::new(vec![2,2]);
+    /// let tensor = Tensor::new(vec![2,2]);
     /// let shape = tensor.shape();
     ///
     /// assert_eq!(shape, vec![2,2]);
@@ -228,9 +248,8 @@ impl Tensor {
     ///
     /// ```
     /// use tinygrad_rs::Tensor;
-    /// use tinygrad_rs::Data;
     ///
-    /// let tensor = Tensor::with_data(vec![1], Data::from_vec(vec![2.0]));
+    /// let tensor = Tensor::scalar(2.0);
     ///
     /// assert_eq!(tensor.item(), 2.0);
     /// ```
@@ -644,6 +663,69 @@ impl Tensor {
         numerator.div(&denominator)
     }
 
+    /// When set to true, autograd capabilities are enabled. Default
+    /// value is false
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    ///
+    /// let mut tensor = Tensor::randn(vec![2,2,2]);
+    /// tensor.requires_grad(true);
+    /// ```
+    pub fn requires_grad(&self, requires_grad: bool) {
+        self.set_requires_grad(requires_grad);
+    }
+
+    /// Check if autograd is on. Can be set using `Tensor.requires_grad(bool)`
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    ///
+    /// let tensor = Tensor::randn(vec![2,2,2]);
+    /// tensor.requires_grad(true);
+    ///
+    /// assert!(tensor.autograd_on());
+    /// ```
+    pub fn autograd_on(&self) -> bool {
+        self.get_requires_grad()
+    }
+
+    /// Zero grad the graph starting from this tensor
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    ///
+    /// let tensor = Tensor::randn(vec![2,2,2]);
+    /// tensor.zero_grad();
+    ///
+    /// assert_eq!(tensor.get(vec![0,0,0]).item().get_grad(), 0.0);
+    /// ```
+    pub fn zero_grad(&self) {
+        self.get_data()
+            .iter()
+            .for_each(|x| x.set_grad(Default::default()));
+    }
+
+    /// Perform backward operation from this tensor
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    ///
+    /// let tensor = Tensor::randn(vec![2,2,2]);
+    /// tensor.backward();
+    /// ```
+    pub fn backward(&self) {
+        (self.0.borrow().backward)();
+    }
+
     fn stride(&self, index: Vec<usize>) -> usize {
         index
             .iter()
@@ -669,7 +751,7 @@ impl Tensor {
         self.0.borrow().strides.to_owned()
     }
 
-    fn set_strides(&mut self, strides: Vec<usize>) {
+    fn set_strides(&self, strides: Vec<usize>) {
         self.0.borrow_mut().strides = strides;
     }
 
@@ -677,7 +759,23 @@ impl Tensor {
         self.0.borrow().offset.to_owned()
     }
 
-    fn set_offset(&mut self, offset: usize) {
+    fn set_offset(&self, offset: usize) {
         self.0.borrow_mut().offset = offset;
+    }
+
+    fn get_requires_grad(&self) -> bool {
+        self.0.borrow().requires_grad.to_owned()
+    }
+
+    fn set_requires_grad(&self, requires_grad: bool) {
+        self.0.borrow_mut().requires_grad = requires_grad;
+    }
+
+    fn backward_(&self) {
+        (self.0.borrow().backward)();
+    }
+
+    fn set_backward(&self, backward: Box<dyn Fn()>) {
+        self.0.borrow_mut().backward = backward;
     }
 }
