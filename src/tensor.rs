@@ -32,7 +32,7 @@ struct InnerTensor {
 
     requires_grad: bool,
     backward: Box<dyn Fn()>,
-    previous: Vec<Tensor>
+    previous: Vec<Tensor>,
 }
 
 impl Tensor {
@@ -71,7 +71,7 @@ impl Tensor {
             offset,
             requires_grad,
             backward,
-            previous
+            previous,
         };
 
         Tensor(Rc::new(RefCell::new(tensor_data)))
@@ -303,7 +303,14 @@ impl Tensor {
                 .collect::<Vec<Data>>()
         };
 
-        Tensor::with_data(self.get_dim(), data)
+        let tensor = Tensor::with_data(self.get_dim(), data);
+
+        if self.autograd_on() {
+            tensor.requires_grad(true);
+            tensor.set_previous(vec![self.clone(), rhs.clone()]);
+        }
+
+        tensor
     }
 
     /// Subtract two tensors
@@ -356,7 +363,14 @@ impl Tensor {
             .map(|d| Data::new(-d.get()))
             .collect();
 
-        Tensor::with_data(self.get_dim(), data)
+        let tensor = Tensor::with_data(self.get_dim(), data);
+
+        if self.autograd_on() {
+            tensor.requires_grad(true);
+            tensor.set_previous(vec![self.clone()]);
+        }
+
+        tensor
     }
 
     /// Return a tensor with the data negated. Results in a new tensor.
@@ -417,7 +431,14 @@ impl Tensor {
                 .collect()
         };
 
-        Tensor::with_data(self.shape(), data)
+        let tensor = Tensor::with_data(self.shape(), data);
+
+        if self.autograd_on() {
+            tensor.requires_grad(true);
+            tensor.set_previous(vec![self.clone(), rhs.clone()]);
+        }
+
+        tensor
     }
 
     /// Matrix multiplication of tensors. Roughly implemented. A lot of
@@ -440,7 +461,7 @@ impl Tensor {
     pub fn matmul(&self, rhs: &Tensor) -> Tensor {
         assert!(!self.shape().is_empty() && !rhs.shape().is_empty());
 
-        if self.shape().len() == 1 && self.shape() == rhs.shape() {
+        let tensor = if self.shape().len() == 1 && self.shape() == rhs.shape() {
             let mut sum = Default::default();
 
             for i in 0..self.shape()[0] {
@@ -520,7 +541,14 @@ impl Tensor {
             Tensor::with_data(dim, data)
         } else {
             panic!("cannot perform matmul on provided tensors");
+        };
+
+        if self.autograd_on() {
+            tensor.requires_grad(true);
+            tensor.set_previous(vec![self.clone(), rhs.clone()]);
         }
+
+        tensor
     }
 
     /// Batch matrix multiplication of tensors. Roughly implemented. Will
@@ -571,7 +599,14 @@ impl Tensor {
 
         dim.extend(mat_shape);
 
-        Tensor::with_data(dim, data)
+        let tensor = Tensor::with_data(dim, data);
+
+        if self.autograd_on() {
+            tensor.requires_grad(true);
+            tensor.set_previous(vec![self.clone(), rhs.clone()]);
+        }
+
+        tensor
     }
 
     /// Divide tensor by another tensor
@@ -616,7 +651,14 @@ impl Tensor {
             .map(|d| Data::new(d.get().powf(pow)))
             .collect();
 
-        Tensor::with_data(self.shape(), data)
+        let tensor = Tensor::with_data(self.shape(), data);
+
+        if self.autograd_on() {
+            tensor.requires_grad(true);
+            tensor.set_previous(vec![self.clone()]);
+        }
+
+        tensor
     }
 
     /// Compute the exponential of each element
@@ -640,7 +682,14 @@ impl Tensor {
             .map(|d| Data::new(d.get().exp()))
             .collect();
 
-        Tensor::with_data(self.shape(), data)
+        let tensor = Tensor::with_data(self.shape(), data);
+
+        if self.autograd_on() {
+            tensor.requires_grad(true);
+            tensor.set_previous(vec![self.clone()]);
+        }
+
+        tensor
     }
 
     /// Compute the tanh of each element
@@ -658,13 +707,20 @@ impl Tensor {
     /// assert_eq!(tensor_tanh.get(vec![1,1]).item(), 0.9640275800758169);
     /// ```
     pub fn tanh(&self) -> Tensor {
-        let scalar1 = Tensor::with_data(vec![1], data![1.0]);
-        let scalar2 = Tensor::with_data(vec![1], data![2.0]);
+        let scalar1 = Tensor::scalar(1.0);
+        let scalar2 = Tensor::scalar(2.0);
 
         let numerator = (self.mul(&scalar2)).exp().sub(&scalar1);
         let denominator = (self.mul(&scalar2)).exp().add(&scalar1);
 
-        numerator.div(&denominator)
+        let tensor = numerator.div(&denominator);
+
+        if self.autograd_on() {
+            tensor.requires_grad(true);
+            tensor.set_previous(vec![self.clone()]);
+        }
+
+        tensor
     }
 
     /// When set to true, autograd capabilities are enabled. Default
@@ -729,7 +785,7 @@ impl Tensor {
     pub fn backward(&self) {
         (self.0.borrow().backward)();
     }
-    
+
     /// Checks to see if tensor is in a Vec of tensors
     ///
     /// # Example
@@ -748,7 +804,7 @@ impl Tensor {
                 return true;
             }
         }
-        
+
         false
     }
 
@@ -804,7 +860,7 @@ impl Tensor {
     fn set_backward(&self, backward: Box<dyn Fn()>) {
         self.0.borrow_mut().backward = backward;
     }
-    
+
     fn get_previous(&self) -> Vec<Tensor> {
         self.0.borrow().previous.to_owned()
     }
