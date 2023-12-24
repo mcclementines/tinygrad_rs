@@ -21,6 +21,7 @@ use crate::Data;
 /// assert_eq!(tensor.get(vec![0,0]).item(), 1.0);
 /// assert_eq!(tensor.get(vec![1,1]).item(), 4.0);
 /// ```
+#[derive(Clone)]
 pub struct Tensor(Rc<RefCell<InnerTensor>>);
 
 struct InnerTensor {
@@ -31,6 +32,7 @@ struct InnerTensor {
 
     requires_grad: bool,
     backward: Box<dyn Fn()>,
+    previous: Vec<Tensor>
 }
 
 impl Tensor {
@@ -60,6 +62,7 @@ impl Tensor {
         let offset = 0;
         let requires_grad = false;
         let backward = Box::new(|| {});
+        let previous = Vec::new();
 
         let tensor_data = InnerTensor {
             data,
@@ -68,6 +71,7 @@ impl Tensor {
             offset,
             requires_grad,
             backward,
+            previous
         };
 
         Tensor(Rc::new(RefCell::new(tensor_data)))
@@ -725,6 +729,28 @@ impl Tensor {
     pub fn backward(&self) {
         (self.0.borrow().backward)();
     }
+    
+    /// Checks to see if tensor is in a Vec of tensors
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinygrad_rs::Tensor;
+    ///
+    /// let tensor = Tensor::randn(vec![2,2]);
+    /// let tensors = vec![tensor.clone()];
+    ///
+    /// assert!(tensor.is_in(&tensors));
+    /// ```
+    pub fn is_in(&self, tensors: &Vec<Tensor>) -> bool {
+        for tensor in tensors {
+            if Rc::ptr_eq(&self.0, &tensor.0) {
+                return true;
+            }
+        }
+        
+        false
+    }
 
     fn stride(&self, index: Vec<usize>) -> usize {
         index
@@ -756,7 +782,7 @@ impl Tensor {
     }
 
     fn get_offset(&self) -> usize {
-        self.0.borrow().offset.to_owned()
+        self.0.borrow().offset
     }
 
     fn set_offset(&self, offset: usize) {
@@ -764,7 +790,7 @@ impl Tensor {
     }
 
     fn get_requires_grad(&self) -> bool {
-        self.0.borrow().requires_grad.to_owned()
+        self.0.borrow().requires_grad
     }
 
     fn set_requires_grad(&self, requires_grad: bool) {
@@ -777,5 +803,13 @@ impl Tensor {
 
     fn set_backward(&self, backward: Box<dyn Fn()>) {
         self.0.borrow_mut().backward = backward;
+    }
+    
+    fn get_previous(&self) -> Vec<Tensor> {
+        self.0.borrow().previous.to_owned()
+    }
+
+    fn set_previous(&self, previous: Vec<Tensor>) {
+        self.0.borrow_mut().previous = previous;
     }
 }
