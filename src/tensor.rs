@@ -767,9 +767,7 @@ impl Tensor {
     /// assert_eq!(tensor.get(vec![0,0,0]).item().get_grad(), 0.0);
     /// ```
     pub fn zero_grad(&self) {
-        self.get_data()
-            .iter()
-            .for_each(|x| x.set_grad(Default::default()));
+        self.set_grad(Default::default());
     }
 
     /// Perform backward operation from this tensor
@@ -783,7 +781,11 @@ impl Tensor {
     /// tensor.backward();
     /// ```
     pub fn backward(&self) {
-        (self.0.borrow().backward)();
+        let mut topo = self.build_topo(&mut Vec::<Tensor>::new(), &mut Vec::<Tensor>::new());
+        topo.reverse();
+
+        self.set_grad(1.0);
+        topo.iter().for_each(|t| t.backward_());
     }
 
     /// Checks to see if tensor is in a Vec of tensors
@@ -808,6 +810,12 @@ impl Tensor {
         false
     }
 
+    fn apply<F: Fn(&Data)>(&self, apply_function: F) {
+        for d in &self.0.borrow_mut().data {
+            apply_function(d)
+        }
+    }
+
     fn stride(&self, index: Vec<usize>) -> usize {
         index
             .iter()
@@ -815,6 +823,20 @@ impl Tensor {
             .map(|(i, s)| i * s)
             .sum::<usize>()
             + self.get_offset()
+    }
+
+    fn build_topo(&self, visited: &mut Vec<Tensor>, topo: &mut Vec<Tensor>) -> Vec<Tensor> {
+        if !self.is_in(visited) {
+            visited.push(self.clone());
+
+            for child in self.get_previous() {
+                *topo = child.build_topo(visited, topo);
+            }
+
+            topo.push(self.clone());
+        }
+
+        topo.clone()
     }
 
     fn get_data(&self) -> Vec<Data> {
@@ -867,5 +889,9 @@ impl Tensor {
 
     fn set_previous(&self, previous: Vec<Tensor>) {
         self.0.borrow_mut().previous = previous;
+    }
+
+    fn set_grad(&self, grad: f64) {
+        self.apply(move |d| d.set_grad(grad));
     }
 }
